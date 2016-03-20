@@ -48,9 +48,9 @@ pequeño.
 efecto visualizando los 6 primeros registros.
 28. Obtenga los valores de la matrix que satisfagan la condición de ser mayor
 que 97, a partir del siguiente código _R_:
-```{r}
-set.seed(1234)
-A <- matrix(runif(25, 1, 250), nrow = 5, ncol = 5, byrow = T)
-```
+ ```{r}
+ set.seed(1234)
+ A <- matrix(runif(25, 1, 250), nrow = 5, ncol = 5, byrow = T)
+ ```
 29. Obtenga los índices de los valores anteriores.
 30. Obtenga los índces de los valores mayores que 90 y menores que 98. 
