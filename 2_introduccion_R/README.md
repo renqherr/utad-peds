@@ -54,4 +54,30 @@ A <- matrix(runif(25, 1, 250), nrow = 5, ncol = 5, byrow = T)
 Obtenga los valores de la matrix que satisfagan la condición de ser mayor
 que 97.
 29. Obtenga los índices de los valores anteriores.
-30. Obtenga los índces de los valores mayores que 90 y menores que 98. 
+30. Obtenga los índces de los valores mayores que 90 y menores que 98.
+
+## 2. Ejercicios de Bucles
+
+1. Escriba un programa en R dentro de una función que busque el primer
+elemento de un vector que sea cero utilizando un bucle `for` y pruébelo con
+vectores de distinto tamaño.
+2. Escriba un programa dentro de una función que haga lo mismo que el anterior
+apartado pero con un bucle `while`.
+3. Compruebe con una función de _R_ la duración de las dos implementaciones y
+como le afectan el tamaño de los vectores.
+
+## 3. El problema de los puntos más cercanos
+
+Dados $n$ puntos en un espacio bi-dimensional, escriba una función en _R_ que
+encuentre los dos puntos más cercanos. El prototipo de está función será:
+```{r}
+PuntosCercanos <- function(x, y) {
+}
+```
+
+Donde `x` e `y` son dos vectores que almacenan los $n$ puntos de un espacio
+bi-dimensional. Para el cálculo de la distancia entre los puntos utilice la
+distancia _Euclídea_.
+
+Extienda la misma función para poder realizar lo mismo sobre espacios
+M-Dimensionales.
