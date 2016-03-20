@@ -69,14 +69,14 @@ como le afectan el tamaño de los vectores.
 
 ## 3. El problema de los puntos más cercanos
 
-Dados $n$ puntos en un espacio bi-dimensional, escriba una función en _R_ que
+Dados _n_ puntos en un espacio bi-dimensional, escriba una función en _R_ que
 encuentre los dos puntos más cercanos. El prototipo de está función será:
 ```{r}
 PuntosCercanos <- function(x, y) {
 }
 ```
 
-Donde `x` e `y` son dos vectores que almacenan los $n$ puntos de un espacio
+Donde `x` e `y` son dos vectores que almacenan los _n_ puntos de un espacio
 bi-dimensional. Para el cálculo de la distancia entre los puntos utilice la
 distancia _Euclídea_.
 
