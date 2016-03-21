@@ -1,0 +1,273 @@
+---
+title: "PEDS - Técnicas de Reducción de Dimensiones"
+author: "Rafael Enríquez-Herrador - rafael.enriquez@live.u-tad.com"
+date: "04/10/2015"
+output:
+  pdf_document:
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+---
+# Introducción
+
+Para la realización de esta práctica hemos seleccionado un dataset que
+contiene mediciones de electrones libres en la ionosfera. Cada medición
+consiste en $34$ variables continuas en el rango $[-1, 1]$ y una adicional
+de clasificación binaria:
+
+* _Good_ (__g__): Cuando la medición muestra algún tipo de evidencia de
+estructura en la ionosfera.
+* _Bad_ (__b__): Cuando no hay evidencia de estructura en la ionosfera.
+
+Se puede descargar y consultar más información sobre este dataset en
+[https://archive.ics.uci.edu/ml/datasets/Ionosphere](https://archive.ics.uci.edu/ml/datasets/Ionosphere)
+
+## Ejercicio 1: Análisis de Componentes Principales (PCA)
+
+### Objetivo
+
+El objetivo de este ejercicio es realizar un análisis de reducción de
+dimensiones mediante el __análisis de componentes principales__, para
+comprobar si se puede predecir si una medición es buena o mala en función
+de una representación de los datos con una dimensionalidad menor.
+
+### Carga de datos
+
+```{r}
+ionosphere <- read.table(file = "data/ionosphere.data", sep = ",")
+```
+
+Veamos un resumen de los datos cargados:
+
+```{r}
+str(ionosphere)
+```
+
+```{r}
+summary(ionosphere)
+```
+
+Observamos que nuestro _dataset_ se compone de 34 variables reales definidas
+en el intervalo $[-1, 1]$ escaladas y centradas en $0$. Además tenemos una
+variable adicional _V35_ que nos definida como _factor_ con dos niveles:
+__g__ y __b__.
+
+### Análisis PCA
+
+Realizamos el análisis sobre las 34 primeras variables (numéricas) y
+omitimos la variable _V35_ que se corresponde con la clasificación. No
+hace falta escalar ni centrar los datos ya que todos los valores se
+almacenaron escaladas entre $[-1, 1]$ y centradas en $0$.
+
+```{r}
+ion.log <- ionosphere[, 1:34]
+ion.class <- ionosphere[, 35]
+```
+
+Calculamos la media y la varianza para cada una de las variables.
+
+```{r}
+ion.mean <- apply(ion.log, 2, mean)
+ion.var <- apply(ion.log, 2, var)
+```
+
+Observamos las 10 variables que más varianza presentan.
+
+```{r}
+head(sort(ion.var, decreasing = T), 10)
+```
+
+Realizamos el cálculo de las componentes principales (sólo sobre las variables
+numéricas).
+
+```{r}
+ion.pca <- prcomp(ion.log)
+```
+
+### Número significativo de Componentes Principales
+
+Para decidir el número significativo de componentes principales que definen
+nuestra muestra, aplicaremos el __criterio del codo__, representando la
+varianza explicada por cada componente principal (de forma individual y
+acumulada).
+
+Cargamos las librerías necesarias para la visualización.
+
+```{r}
+# install.packages(devtools)
+library(devtools)
+
+# Visualizacion PCA/clustering
+# install_github("sinhrks/ggfortify")
+# install_github("ggbiplot", "vqv")
+library(ggbiplot)
+
+# install.packages(corrplot)
+# library(corrplot)
+library(reshape2)
+library(ggplot2)
+```
+
+Calculamos la __proporción de varianza__ explicada por cada componente
+principal.
+
+```{r}
+ion.pca.var <- ion.pca$sdev^2
+ion.pca.pve <- ion.pca.var/sum(ion.pca.var)
+```
+
+Representamos la __varianza explicada__ por cada componente principal.
+
+```{r}
+qplot(seq_along(ion.pca.pve),
+      ion.pca.pve,
+      geom = c("point", "path"),
+      xlab = "Componentes principales",
+      ylab = "Proporción de Varianzas Explicadas")
+```
+
+Representamos la __varianza explicada acumulada__ por cada componente
+principal.
+
+```{r}
+qplot(seq_along(ion.pca.pve),
+      cumsum(ion.pca.pve),
+      geom = c("point", "path"),
+      xlab = "Componentes principales",
+      ylab = "Proporción acumulada de Varianzas Explicadas")
+```
+
+Observamos que con las primeras __12__ componentes principales explicamos
+__más del 80%__ de la varianza y que con las primeras __20__ explicamos
+__más del 90%__ de la varianza de los datos.
+
+### Matriz de rotación
+
+A continuación representaremos la matriz de rotación frente a las dos
+primeras componentes principales.
+
+```{r}
+g <- ggbiplot(ion.pca, obs.scale = 1, var.scale = 1, 
+              groups = ion.class, ellipse = TRUE, 
+              circle = TRUE)
+g <- g + scale_color_discrete(name = '')
+g <- g + theme(legend.direction = 'vertical', 
+               legend.position = 'right')
+print(g)
+```
+
+Observamos que los resultados mostrados no son significativos
+visualmente, ya que no se aprecia una agrupación clara de los
+datos, lo que concuerda con nuestra anterior afirmación de que
+necesitamos, al menos, de las 12 primeras componentes
+principales para explicar la varianza de los datos.
+
+Además representamos el peso de cada variable en cada componente principal
+(__PC1__ y __PC2__).
+
+```{r}
+ion.pca.melted <- melt(ion.pca$rotation[, 1:2])
+
+barplot <- ggplot(data = ion.pca.melted) +
+  geom_bar(aes(x = Var1, y = value, fill = Var1), stat = "identity") +
+  facet_wrap(~Var2) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1))
+print(barplot)
+```
+
+Tal y como se apreciaba en la visualización de la matriz de
+rotación frente a __PC1__ y __PC2__, para __PC1__, las variables __V15__ y
+y __V17__ tienen el mayor peso en su definición y para __PC2__, esto ocurre
+con __V20__ y __V22__.
+
+## Ejercicio 2: Isomap
+
+### Objetivo
+
+El objetivo de este ejercicio es aplicar el metodo no-lineal de reducción
+de dimensiones Isomap, para el mismo proposito que el ejercicio anterior.
+
+### Cálculo de Isomap
+
+Cargamos las librerías necesarias.
+
+```{r}
+### Para reducción de dimensiones mediante metodos no-lineales
+# source("http://bioconductor.org/biocLite.R")
+# biocLite("RDRToolbox")
+### Para crear plots 3D hay que instalar el paquete rlg
+# install.packages("rgl")
+
+library(RDRToolbox)
+library(rgl)
+```
+
+Aplicamos Isomap para 2 y 3 dimensiones, utilizando 10 vecinos cercanos para
+calcular la variante.
+
+```{r}
+ion.iso_dim2 <- Isomap(data = as.matrix(ion.log), dims = 2, k = 10)
+ion.iso_dim3 <- Isomap(data = as.matrix(ion.log), dims = 3, k = 10)
+
+# Añadimos la clasificación previa de cada variable
+ion.iso_dim2$class <- ion.class
+ion.iso_dim3$class <- ion.class
+```
+
+Representamos la nueva distribución de los datos en 2 dimensiones.
+
+```{r}
+plotDR(data=ion.iso_dim2$dim2,
+       labels = ion.iso_dim2$class,
+       legend = T,
+       col = c("blue", "red"))
+```
+
+Representamos la nueva distribución de los datos en 3 dimensiones.
+
+```{r}
+plotDR(data=ion.iso_dim3$dim3,
+       labels = ion.iso_dim3$class,
+       legend = T,
+       col = c("blue", "red"))
+```
+
+Aplicamos Isomap reduciendo a las 10 primeras dimensiones, utilizando los 10
+vecinos cercanos para calcular la variante y dibujamos los residuos buscando
+el criterio del codo.
+
+```{r}
+ion.iso <- Isomap(data = as.matrix(ion.log),
+                  dim = 1:10,
+                  k = 10,
+                  plotResiduals = T)
+```
+
+Al dibujar la varianza residual, aplicando el criterio del codo, observamos
+que de __4 a 5 dimensiones__ obtenemos un valor por encima del __80%__ de la
+varianza. Este método realiza una reducción más eficiente que en PCA, donde
+necesitabamos al menos de 12 componentes principales para explicar un
+porcentaje de varianza similar. Por lo tanto, podemos intuir que nuestros
+datos presentan una __estructura no lineal en 34 dimensiones__.
+
+Dibujamos la matriz de rotación frente a las 2 primeras componentes
+que representa cada componente del indice en las nuevas coordenadas.
+Para ello aplicamos _kmeans_ para _clustering_ y, conociendo a priori la
+clasificación de nuestras medidas, observamos como se agrupan.
+
+```{r}
+ion_iso <- as.data.frame(ion.iso$dim5)
+clus <- kmeans(as.data.frame(ion.iso$dim5), 2, nstart = 1)
+ion_iso$cluster <- clus$cluster
+ion_iso$class <- ion.class
+
+p <- ggplot(ion_iso, aes(x=V1, y=V2)) + 
+  geom_point(shape = 1, colour = "black") +
+  stat_ellipse(geom = "polygon", alpha = 1/2, aes(fill = factor(cluster)))  +
+  annotate("text", ion_iso$V1, ion_iso$V2, label = ion_iso$class, size = 3) + 
+  labs(title = "Relaciones entre varianzas residuales (V1 y V2)")
+
+print(p)
+```
+
