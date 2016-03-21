@@ -1,0 +1,408 @@
+---
+title: 'U-TAD - PEDS: Práctica 9 - Teoría de Grafos y Redes Sociales'
+author: "Rafael Enríquez-Herrador"
+date: "14/07/2015"
+output: html_document
+---
+
+Introducción
+================================================================
+
+Para el ssdesarrollo de esta práctica hemos elegido el _Dataset_ de la red de e-mails de Enron. Los
+_Datasets_ se puede descargar desde
+[aquí](https://github.com/pedroconcejero/public-sna/blob/master/enron.RData) y desde
+[aquí](https://github.com/pedroconcejero/public-sna/blob/master/edges_w_message.zip)
+y vienen preparados para ser utilizados directamente en R con ayuda de la librería _igraph_.
+
+El primer _Dataset_ nos proporciona los vértices y una muestra de los enlaces para trabajar
+más fácilmente. El segundo _Dataset_ nos proporciona la red completa de enlaces (_edges_)
+que nos permitirá analizar el grafo en profundidad.
+
+Inicialmente cargaremos las librerías necesarias y nuestro _Dataset_ de muestra para analizar el problema, el conocido como
+_enron.RData_.
+
+```{r}
+## install.packages(c("igraph", "gplots"))
+library(igraph)
+library(ggplot2)
+
+load("datasets/enron.RData")
+```
+A continuación visualizaremos un resumen del _Dataset_ con el que estamos trabajando.
+
+```{r}
+summary(edges)
+summary(nodes)
+nrow(edges)
+nrow(nodes)
+```
+
+Observamos que al cargar el _Dataset_ obtenemos 2 objetos: **nodes** y **edges** que representan
+las personas de la empresa (con ID de dirección de e-mail, apellidos y puesto en la empresa) y los
+e-mails enviados y recibidos (con dirección de e-mail, ID de dirección de e-mail, remitente,
+destinatario, tipo, fecha y numero de e-mails).
+
+Creación de la red
+================================================================
+
+Creamos la red mediante `graph.data.frame` a partir de los objetos **edges** y **nodes**.
+Seleccionamos que sea dirigida, ya que al tratarse de envío de e-mails de una dirección a otra
+parece lo más razonable.
+
+```{r}
+net <- graph.data.frame(edges, directed = T, vertices = nodes)
+```
+Estudiamos el objeto _igraph_ generado.
+
+```{r}
+class(net)
+summary(net)
+head(net)
+```
+
+```{r}
+## Vertices
+head(V(net), 10)
+## Enlaces
+head(E(net), 10)
+
+## Propiedades de la tabla
+table(V(net)$status)
+head(table(E(net)$date))
+
+## Observamos que el formato de fecha no se entiende correctamente
+head(table(edges$date))
+```
+Vemos la distribución por fechas de envío de e-mails
+
+```{r, echo=FALSE}
+plot(table(edges$date))
+```
+
+Rehacemos el grafo con los datos completos
+
+```{r}
+load("datasets/edges_w_message.RData")
+
+summary(edges.full)
+nrow(edges.full)
+```
+Ahora disponemos de 61673 enlaces. Arreglamos el formato de fecha.
+
+```{r}
+edges.full$date <- as.POSIXct(edges.full$date)
+```
+
+Creamos la nueva red completa.
+
+```{r}
+net.full <- graph.data.frame(edges.full[, c("sender", "receiver", "type", "subject", "date")],
+                             directed = T,
+                             vertices = nodes)
+
+class(net.full)
+summary(net.full)
+```
+Estudiamos el nuevo objeto _igraph_ generado.
+
+```{r}
+## Vertices
+head(V(net.full), 10)
+## Enlaces
+head(E(net.full), 10)
+
+table(V(net.full)$status)
+head(table(E(net.full)$date))
+```
+
+Pintamos de nuevo, la distribución del envío de e-mails por fecha
+
+```{r, echo=FALSE}
+plot(table(edges.full$date))
+```
+
+Representación del grafo
+================================================================
+
+La primera representación del grafo nos permitirá intuir como están
+distribuidos nuestros nodos y sus enlaces. Utilizamos la versión
+reducida de la red, que contiene el mismo número de nodos que la
+original y reducirá el tiempo de carga, siendo lo suficientemente
+representativa.
+
+```{r}
+write.graph(net, file = "net.graphml", format = "graphml")
+plot(net,
+     vertex.label = NA,
+     layout = layout.auto(net),
+     edge.arrow.size = 0.1,
+     vertex.size = 3,
+     edge.curved = T)
+```
+
+Métricas de los nodos
+================================================================
+
+A continuación veremos medidas de centralidad del grafo:
+
+## Grado (Degree Centrality)
+
+En este caso, al ser una red **dirigida**, contaremos con tres medidas
+de grado según estudiemos el _total_ de enlaces, los que se refieren a
+correos _enviados_ o a correos _recibidos_.
+
+```{r}
+## Total
+nodes$degree_total <- degree(net.full, v=V(net.full), mode = c("total"))
+## Recibidos
+nodes$degree_in <- degree(net.full, v=V(net.full), mode = c("in"))
+## Enviados
+nodes$degree_out <- degree(net.full, v=V(net.full), mode = c("out"))
+```
+
+Observamos el TOP 10 de los nodos para cada grado:
+
+```{r}
+## Total
+head(nodes[order(nodes$degree_total, decreasing = T),
+           c("Email_id", "lastName", "degree_total")], n = 10L)
+## Recibidos
+head(nodes[order(nodes$degree_in, decreasing = T),
+           c("Email_id", "lastName", "degree_in")], n = 10L)
+## Enviados
+head(nodes[order(nodes$degree_out, decreasing = T),
+           c("Email_id", "lastName", "degree_out")], n = 10L)
+```
+
+## Betweenness Centrality
+
+```{r}
+nodes$betweenness <- betweenness(net.full, v=V(net.full), directed = T)
+```
+
+Observamos el TOP 10 de los nodos:
+
+```{r}
+head(nodes[order(nodes$betweenness, decreasing = T), 
+           c("Email_id", "lastName", "betweenness")], n = 10L)
+```
+
+## Cercanía (Closeness Centrality)
+
+En este caso, al ser una red **dirigida**, contaremos con tres medidas
+de cercanía según estudiemos el _total_ de enlaces, los que se
+refieren a correos _enviados_ o a correos _recibidos_.
+
+```{r}
+## Total
+nodes$closeness_total <- closeness(net.full, v=V(net.full), mode = c("total"))
+## Recibidos
+nodes$closeness_in <- closeness(net.full, v=V(net.full), mode = c("in"))
+## Enviados
+nodes$closeness_out <- closeness(net.full, v=V(net.full), mode = c("out"))
+```
+
+Observamos el TOP 10 de los nodos para cada cercanía:
+
+```{r}
+## Total
+head(nodes[order(nodes$closeness_total, decreasing = T),
+           c("Email_id", "lastName", "closeness_total")], n = 10L)
+## Recibidos
+head(nodes[order(nodes$closeness_in, decreasing = T),
+           c("Email_id", "lastName", "closeness_in")], n = 10L)
+## Enviados
+head(nodes[order(nodes$closeness_out, decreasing = T),
+           c("Email_id", "lastName", "closeness_out")], n = 10L)
+```
+
+## Coeficiente de Clustering (Clustering Coefficient or Transitivity)
+
+```{r}
+nodes$transitivity <- transitivity(net.full,
+                                   type = c("local"),
+                                   vids = V(net.full))
+```
+
+Observamos el TOP 10 de los nodos para cada coeficiente de clustering:
+
+```{r}
+head(nodes[order(nodes$transitivity, decreasing = T),
+           c("Email_id", "lastName", "transitivity")], n = 10L)
+```
+
+## Eigenvector Centrality
+
+```{r}
+nodes$eigenvector <- eigen_centrality(net.full, directed = T, scale = T)$vector
+```
+
+Observamos el TOP 10 de los nodos para cada Eigenvector Centrality:
+
+```{r}
+head(nodes[order(nodes$eigenvector, decreasing = T),
+           c("Email_id", "lastName", "eigenvector")], n = 10L)
+```
+
+## Vecindad (Neighborhood Size)
+
+Se medirá como el alcance a 2 saltos (amigos de amigos).
+
+```{r}
+nodes$neighbours <- neighborhood.size(net.full,
+                                      order = 2,
+                                      mode = c("all"),
+                                      nodes = V(net.full))
+```
+
+Observamos el TOP 10 de los nodos que más vecinos tienen:
+
+```{r}
+head(nodes[order(nodes$neighbours, decreasing = T),
+           c("Email_id", "lastName", "neighbours")], n = 10L)
+```
+
+Comparando las medidas obtenidas con el grado de centralidad _total_
+tenemos las siguientes gráficas:
+
+```{r, echo=FALSE}
+
+plot(nodes$degree_total, nodes$degree_in, log = "xy", col = "yellow3")
+plot(nodes$degree_total, nodes$degree_out, log = "xy", col = "purple3")
+plot(nodes$degree_total, nodes$betweenness, log = "xy", col = "blue3")
+plot(nodes$degree_total, nodes$closeness_total, log = "xy", col = "green3")
+plot(nodes$degree_in, nodes$closeness_in, log = "xy", col = "brown3")
+plot(nodes$degree_out, nodes$closeness_out, log = "xy", col = "gold3")
+plot(nodes$degree_total, nodes$transitivity, log = "xy", col = "red3")
+plot(nodes$degree_total, nodes$eigenvector, log = "xy", col = "pink3")
+plot(nodes$degree_total, nodes$neighbours, log = "xy", col = "orange3")
+
+```
+
+Almacenamos las medidas en nuestra red para su posterior tratamiento:
+
+```{r}
+V(net.full)$degree <- nodes$degree_total
+V(net.full)$degree_out <- nodes$degree_out
+V(net.full)$degree_in <- nodes$degree_in
+V(net.full)$betweenness <- nodes$betweenness
+V(net.full)$transitivity <- nodes$transitivity
+V(net.full)$neighbours <- nodes$neighbours
+```
+
+Conclusiones
+================================================================
+
+Hasta ahora hemos estado configurando nuestra red y analizando los datos contenidos en
+ella mediante las medidas de centralidad de los nodos. La representación gráfica del grafo
+mediante **igraph** no nos ha aportado mucha información y la información de mayor utilidad
+nos la dió la representación gráfica del número de enlaces (e-mails enviados o recibidos)
+por fecha, que nos muestra que la mayoría de los e-mails se enviaron/recibieron entre Agosto
+de 2001 y Febrero de 2002. Buscando un poco por Internet, nos topamos con el siguiente
+[enlace](https://es.wikipedia.org/wiki/Enron#Ca.C3.ADda_de_la_empresa). En el se puede leer
+lo siguiente:
+
+> En agosto de 2000 la empresa alcanzó su cenit, logrando una cotización de $ 90.56 dólares por cada acción. Sin embargo, una vez iniciado el año 2001, las acciones de la empresa en Wall Street comenzaron a caer rápidamente de 85 a 30 dólares, cuando surgieron rumores de que las ganancias de Enron eran el resultado de negocios con sus propias subsidiarias, una práctica que le permitía "maquillar" las gigantescas pérdidas que había sufrido en los últimos años. Cuando se hizo público el escándalo sobre el uso de prácticas irregulares de contabilidad, Enron se vino abajo y llegó al borde de la bancarrota hacia mediados de noviembre de 2001. Desde allí, la palabra "Enron" se convirtió, para la cultura popular, en un sinónimo del fraude empresarial planificado.
+
+Haciendo uso de subgrafos, vamos a obtener la red de la caída de Enron, fechada en el artículo
+a partir del 12 de Febrero de 2012:
+
+```{r}
+## Obtenmos el día a partir de la fecha del e-mail
+edges.full$day <- strftime(edges.full$date, "%Y-%m-%d")
+
+## Obtenemos el subgrafo de los e-mails a partir del 12-02-2012, eliminando los
+## nodos que no tengan ningún enlace
+net.fall <- subgraph.edges(net.full,
+                                 which(E(net.full)$date > "2001-02-12 00:00:00"),
+                                 delete.vertices = TRUE)
+
+## Resumen del nuevo grafo
+summary(net.fall)
+```
+
+Representamos el grafo obtenido:
+
+```{r, echo=FALSE}
+write.graph(net.fall, file = "net.fall.graphml", format = "graphml")
+plot(net.fall,
+     vertex.label = V(net.fall)$lastName,
+     vertex.label.cex = 0.5,
+     layout = layout.fruchterman.reingold(net.fall),
+     edge.arrow.size = 0.01,
+     vertex.size = V(net.fall)$degree/200,
+     edge.curved = T)
+```
+
+A continuación vamos a obtener el grafo social:
+
+```{r}
+## Determina la tasa de respuesta a e-mails (reciprocidad) de la red
+reciprocity(net.fall)
+
+## Medimos la relación entre cada par de nodos en el grafo dirigido,
+## pudiendo ser mutua, asimétrica o inexistente. Para cada tipo se
+## obtendrá el número de pares de nodos.
+dyad_census(net.fall)
+```
+
+```{r}
+edges.fall <- edges.full[edges.full$date > "2001-02-12 00:00:00",]
+pairs <- as.data.frame(unique(edges.fall[c(1,2)]))
+pairs <- pairs[order(pairs$sender, pairs$receiver),]
+
+edges.fall.ordered <- edges.fall[order(edges.fall$sender, edges.fall$receiver),]
+
+weight <- aggregate(edges.fall.ordered[,3],
+                    by = list(edges.fall.ordered[,1],
+                              edges.fall.ordered[,2]),
+                    length) 
+
+weight <- weight[order(weight$Group.1, weight$Group.2),]
+
+## Verificamos con head y tail
+head(pairs, n = 10L)
+head(weight, n = 10L)
+tail(pairs, n = 10L)
+tail(weight, n = 10L)
+pairs[seq(236:248),]
+weight[seq(236:248),]
+
+## Mezclamos pairs y weight
+pairs$weight <- weight$x
+
+## Verificamos
+head(pairs)
+
+## Construimos el grafo social
+net.fall.sna <- graph.data.frame(pairs,
+                                 directed = T,
+                                 vertices = nodes)
+
+## Mostramos el resumen del nuevo grafo
+summary(net.fall.sna)
+
+## Medimos la reciprocidad y la relación entre cada par
+## de nodos
+reciprocity(net.fall.sna)
+dyad_census(net.fall.sna)
+
+## Convertimos de grafo dirigido a otro no dirigido
+net.fall.social <- as.undirected(net.fall.sna,
+                              mode = "collapse",
+                              edge.attr.comb = "sum")
+
+## Resumen del grafo
+summary(net.fall.social)
+```
+
+Dibujamos el grafo de la red social de la caída de Enron:
+
+```{r, echo=FALSE}
+plot(net.fall.social,
+     main = "Enron fall social network",
+     layout = layout.fruchterman.reingold(net.fall.social),
+     vertex.label = V(net.fall.social)$lastName,
+     vertex.size = V(net.fall.social)$degree, 
+     edge.curved = T)
+```
