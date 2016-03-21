@@ -1,0 +1,77 @@
+---
+title: 'U-TAD - PEDS: Práctica 14 - Técnicas de aprendizaje no supervisado'
+author: "Rafael Enríquez-Herrador (rafael.enriquez@live.u-tad.com)"
+date: "17/02/2016"
+output: html_document
+---
+
+## Análisis de aceites de oliva (II)
+
+Analizar los clústers construidos sea con _k-medias_ o con _k-medioides_:
+
+* ¿Qué variables son las que más distinguen los clústers? ¿Alguna no lo hace?
+* ¿Puedes hacer un pequeño estudio de la calidad del clúster (gráficos de
+bandera o similar)?
+* Estudiar uno de los clústers y mostrar la distribución de las variables en él.
+Comparar con la distribución de la muestra entera.
+* ¿Se correlacionan estos clústers con las variables geográficas?
+
+Cargamos las librerías que utilizaremos:
+
+```{r}
+# install.packages("ggplot2")
+library(ggplot2)
+# install.packages("devtools")
+library(devtools)
+install_github("pablo14/clusplus")
+library(clusplus)
+```
+
+Cargamos los datos:
+
+```{r}
+set.seed(1234)
+
+olive <- read.table(file = "../dat/olive.txt", header = T, sep = "\t")
+data <- scale(olive[, -c(1, 2, 11)])
+```
+
+Generemos 6 clústeres para _k-means_ y analizamos el peso de cada variable
+del _dataset_ para cada clúster usando la función *plot_clus_coord* del
+paquete __pablo14/clusplus__:
+
+```{r}
+fit.km <- kmeans(data, centers = 6, nstart = 25)
+aggregate(olive[, 3:10], by=list(cluster=fit.km$cluster), mean)
+plot_clus_coord(fit.km, data)
+```
+
+Observamos que las variables de mayor peso para cada clúster (por encima del
+70%) son:
+
+* Para el __C1__: _palmitic_, _stearic_, _linoleic_, _arachidic_ y _eicosenoic_
+* Para el __C2__: _linoleic_ y _arachidic_
+* Para el __C3__: _oleic_, _linoleic_ y _arachidic_
+* Para el __C4__: _stearic_, _oleic_, _linoleic_, _arachidic_ y _eicosenoic_
+* Para el __C5__: _palmitic_, _palmitoleic_, _linoleic_, _linolenic_ _arachidic_
+y _eicosenoic_
+* Para el __C6__: _stearic_ y _oleic_
+
+Veamos como se corresponden los clústeres con las regiones geográficas:
+
+```{r}
+df <- olive
+df$cluster <- fit.km$cluster
+ggplot(df, aes(x = Region)) + geom_bar() + facet_grid(cluster ~ .)
+
+table(fit.km$cluster, olive$Region)
+```
+
+Y lo mismo con las áreas geográficas:
+
+```{r}
+ggplot(df, aes(x = Area)) + geom_bar() + facet_grid(cluster ~ .)
+
+table(fit.km$cluster, olive$Area)
+```
+

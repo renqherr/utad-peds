@@ -1,0 +1,127 @@
+---
+title: 'U-TAD - PEDS: Práctica 14 - Técnicas de aprendizaje no supervisado'
+author: "Rafael Enríquez-Herrador (rafael.enriquez@live.u-tad.com)"
+date: "17/02/2016"
+output: html_document
+---
+
+## Análisis de aceites de oliva (III)
+
+Repetir el análisis sobre los mismos datos pero transformados mediante PCA:
+
+1. Reducir la dimensión del conjunto de datos usando PCA (¿cuántas son
+suficientes?)
+2. Crear clústers usando k-medias o k-medioides.
+
+Analizar brevemente los resultados obtenidos.
+
+Cargamos las librerías que utilizaremos:
+
+```{r}
+# install.packages("data.table")
+library(data.table)
+# install.packages("NbClust")
+library(NbClust)
+# install.packages(devtools)
+library(devtools)
+# Visualizacion PCA/clustering
+# install_github("sinhrks/ggfortify")
+# install_github("ggbiplot", "vqv")
+library(ggbiplot)
+# install.packages("ggplot2")
+library(ggplot2)
+# install_github("pablo14/clusplus")
+library(clusplus)
+```
+
+Cargamos los datos:
+
+```{r}
+set.seed(1234)
+
+olive <- read.table(file = "../dat/olive.txt", header = T, sep = "\t")
+data <- olive[, -c(1, 2, 11)]
+```
+
+Aplicamos PCA al _dataset_. En este caso dejaremos que sea el propio algoritmo
+del PCA quien se encargue de escalar los datos (para intentar encontrar
+diferencias con nuestro primer análisis)
+
+```{r}
+data.pca <- prcomp(data, scale. = T)
+summary(data.pca)
+```
+
+Describimos gráficamente la proporción de la varianza explicada por cada
+componente principal para decidir cuantas componentes son suficientes
+para nuestro análisis.
+
+```{r}
+data.pca.var <- data.pca$sdev^2
+data.pca.pve <- data.pca.var/sum(data.pca.var)
+
+qplot(seq_along(data.pca.pve),
+      data.pca.pve,
+      geom = c("point", "path"),
+      xlab = "Componentes principales",
+      ylab = "Proporción de Varianzas Explicadas")
+```
+
+Y la proporción acumulada de varianza explicada por cada componente principal.
+
+```{r}
+qplot(seq_along(data.pca.pve),
+      cumsum(data.pca.pve),
+      geom = c("point", "path"),
+      xlab = "Componentes principales",
+      ylab = "Proporción acumulada de Varianzas Explicadas")
+```
+
+Observamos que con 4 componentes principales explicamos más del 90% de los
+datos.
+
+Procedemos a generar los clústeres mediante _k-means_:
+
+```{r}
+data.pca <- data.frame(data.pca$x[, 1:4])
+```
+
+Haciendo uso de la función _NbClust_ del paquete __NbClust__, intentamos
+determinar el mejor número de clústeres estudiando la distancia Euclídea.
+
+```{r}
+nc <- NbClust(data.pca, min.nc = 2, max.nc = 10,
+              distance = "euclidean", method = "kmeans")
+table(nc$Best.nc[1,])
+barplot(table(nc$Best.n[1,]),
+        xlab="Num. de Clústeres", ylab="Num. de Criterios",
+        main="Num. de Clústeres elegidos para 26 criterios")
+```
+
+Parece que en este caso tenemos un empate entre el número de clústeres que
+mejor se adaptan a nuestro _dataset_. Veamos para cada opción las tablas
+agregadas y el peso de cada componente principal en el clúster:
+
+* Para __2__ clústeres:
+
+```{r}
+fit.km2 <- kmeans(data.pca, 2, nstart = 25)
+aggregate(data.pca, by=list(cluster=fit.km2$cluster), mean)
+plot_clus_coord(fit.km2, data.pca)
+```
+
+* Para __3__ clústeres:
+
+```{r}
+fit.km3 <- kmeans(data.pca, 3, nstart = 25)
+aggregate(data.pca, by=list(cluster=fit.km3$cluster), mean)
+plot_clus_coord(fit.km3, data.pca)
+```
+
+* Para __6__ clústeres:
+
+```{r}
+fit.km6 <- kmeans(data.pca, 6, nstart = 25)
+aggregate(data.pca, by=list(cluster=fit.km6$cluster), mean)
+plot_clus_coord(fit.km6, data.pca)
+```

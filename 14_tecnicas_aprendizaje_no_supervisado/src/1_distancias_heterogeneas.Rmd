@@ -1,0 +1,81 @@
+---
+title: 'U-TAD - PEDS: Práctica 14 - Técnicas de aprendizaje no supervisado'
+author: "Rafael Enríquez-Herrador (rafael.enriquez@live.u-tad.com)"
+date: "17/02/2016"
+output: html_document
+---
+
+## Distancias heterogeneas
+
+Crear una función que calcule la distancia entre dos puntos dados
+por sus coordenadas (latitud y longitud) y calcular las distancias
+(en kilómetros) entre:
+
+* Madrid (40.4000, -3.7167) y Buenos Aires (-34.6033, -58.3817)
+* Sidney (-33.8650, 151.2094) y Bogotá (4.5981, -74.0758)
+
+Para ello utilizaremos la
+[**Fórmula de Haversine**](https://en.wikipedia.org/wiki/Haversine_formula):
+
+$$d = 2r\arcsin\lgroup\sqrt{
+\sin^2((\varphi_2 - \varphi_1)/2)
++ \cos(\varphi_1)\cos(\varphi_2)\sin^2((\lambda_2 - \lambda_1)/2))}\rgroup$$
+
+Donde:
+
+* $d$ es la distancia entre los dos puntos en _km_
+* $r$ es el __Radio Medio de la Tierra__ definido por el
+[__IUGG__](https://en.wikipedia.org/wiki/International_Union_of_Geodesy_and_Geophysics),
+aproximádamente 6,371.0088 _km_
+* $\varphi_1$, $\varphi_2$ son la latitud del punto 1 y la latitud del punto 2
+en _radianes_
+* $\lambda_1$, $\lambda_2$ son la longitud del punto 1 y la longitud del punto
+2 en _radianes_
+
+```{r}
+deg2rad <- function(deg) return(deg*pi/180)
+
+geodistance <- function(long1, lat1, long2, lat2) {
+  dif.long <- deg2rad(long2 - long1)
+  dif.lat <- deg2rad(lat2 - lat1)
+  long1 <- deg2rad(long1)
+  long2 <- deg2rad(long2)
+  lat1 <- deg2rad(lat1)
+  lat2 <- deg2rad(lat2)
+  R <- 6371.0088 # Radio de la Tierra en kilómetros
+  a <- sin(dif.lat/2)^2 + cos(lat1) * cos(lat2) * sin(dif.long/2)^2
+  c <- 2 * asin(min(1,sqrt(a)))
+  d = R * c
+  return(d) # Distancia en kilómetros
+}
+```
+
+Definida nuestra función, compararemos los resultados con los obtenidos por
+la función _geodist_ del paquete __gmt__ de __R__:
+
+```{r}
+# install.packages("gmt")
+library(gmt)
+```
+
+Calculamos la distancia entre _Madrid_ y _Buenos Aires_:
+
+```{r}
+geodistance(40.4000, -3.7167, -34.6033, -58.3817) # Funcion del ejercicio
+geodist(40.4000, -3.7167, -34.6033, -58.3817, "km") # Paquete gmt
+```
+
+Calculamos la distancia entre _Sidney_ y _Bogotá_:
+
+```{r}
+geodistance(-33.8650, 151.2094, 4.5981, -74.0758) # Funcion del ejercicio
+geodist(-33.8650, 151.2094, 4.5981, -74.0758, "km") # Paquete gmt
+```
+
+Se observa que, aunque nuestra función tiene un rendimiento y precisión
+aceptables (especialmente si trabajamos con distancias pequeñas), presenta un
+error significativo en la distancia entre _Madrid_ y _Buenos Aires_,
+probablemente debido a que consideramos a la Tierra como una _esfera_, cuando
+en verdad se trata más de un _esferoide_. Una forma de aumentar la precisión
+sería basar nuestra función en la 
+[**Fórmula de Vincenty**](https://en.wikipedia.org/wiki/Vincenty%27s_formulae)

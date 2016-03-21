@@ -1,0 +1,137 @@
+---
+title: 'U-TAD - PEDS: Práctica 14 - Técnicas de aprendizaje no supervisado'
+author: "Rafael Enríquez-Herrador (rafael.enriquez@live.u-tad.com)"
+date: "17/02/2016"
+output: html_document
+---
+
+## Análisis de aceites de oliva (I)
+
+Analizar el fichero `../dat/olive.txt` con dos algoritmos no supervisados.
+Usar solo las variables numéricas relativas a concentración de sustancias
+químicas. Dependiendo de los algoritmos elegidos, determinar y razonar
+(si procede) el número adecuado de clústers o la distancia empleada. Si procede
+hacer algún tipo de normalización en los datos y cuál.
+Usar, cuando menos, o _k-medias_ o _k-medioides_.
+
+Cargamos las librerías que utilizaremos:
+
+```{r}
+# install.packages("data.table")
+library(data.table)
+# install.packages("ggplot2")
+library(ggplot2)
+# install.packages("NbClust")
+library(NbClust)
+# install.packages("cluster")
+library(cluster)
+# install.packages("fpc")
+library(fpc)
+```
+
+Cargamos los datos e inspeccionamos un poco el _dataset_
+
+```{r}
+set.seed(1234)
+
+olive <- read.table(file = "../dat/olive.txt", header = T, sep = "\t")
+
+summary(olive)
+str(olive)
+```
+
+De la observación de nuestros datos podemos sacar las siguientes condiciones a
+_priori_:
+
+* Puede que los datos se puedan organizar adecuadamente en __9__ clústeres
+atendiendo a __Area__ o en __3__ clústeres atendiendo a __Region__ que son
+las variables categóricas principales que encontramos en el _dataset_.
+* Para realizar el _clustering_, deberemos escalar los datos para obtener
+distancias, puesto que existe una gran diferencia entre los rangos de los datos
+(véase, por ejemplo **palmitoleic** en comparación con **linoleic**).
+
+Al aplicar el algoritmo del _k-means_ y, en orden a decidir el número de
+clústeres que se ajustan a nuestro _dataset_, el
+_Total within-cluster sum of squares_ es una medida que nos puede aportar mucha
+información para decidir que número de clústeres es el adecuado, ya que a mayor
+valor más distintos serán los elementos que pertenecen al mismo clúster.
+
+En primer lugar preparamos los datos para operar con ellos.
+
+```{r}
+# Eliminamos las columnas innecesarias y escalamos los datos.
+data <- scale(olive[, -c(1, 2, 11)])
+```
+
+Creamos una función que nos permita visualizar para varios números de
+clústeres seleccionados, aplicando _k-means_, el
+_Total within-cluster sum of squares_.
+
+```{r}
+wssplot <- function(data, nc = 10, seed = 1234) {
+  wss <- (nrow(data) - 1) * sum(apply(data, 2, var))
+  for (i in 2:nc){
+    set.seed(seed)
+    wss[i] <- sum(kmeans(data, centers=i)$withinss)
+  }
+  plot(1:nc, wss, type="b", xlab="Número de clústeres",
+       ylab="Within groups sum of squares")
+}
+```
+
+Obtenemos la gráfica para 10 clústeres.
+
+```{r}
+wssplot(data, 10)
+```
+
+Se puede observar que tenemos un codo en 5 clústeres, por lo que parece que
+esta podría ser la agrupación más óptima en relación acierto vs rendimiento
+para nuestro __dataset__.
+
+Haciendo uso de la función _NbClust_ del paquete __NbClust__, intentamos
+determinar el mejor número de clústeres estudiando la distancia Euclídea.
+
+```{r}
+nc <- NbClust(data, min.nc = 2, max.nc = 10,
+              distance = "euclidean", method = "kmeans")
+table(nc$Best.nc[1,])
+hist(nc$Best.nc[1,], breaks = max(na.omit(nc$Best.nc[1,])),
+     main = "Num. de clústeres recomendados")
+```
+
+```{r}
+barplot(table(nc$Best.n[1,]),
+        xlab="Num. de Clústeres", ylab="Num. de Criterios",
+        main="Num. de Clústeres elegidos para 26 criterios")
+
+set.seed(1234)
+fit.km <- kmeans(data, 6, nstart = 25)
+fit.km$size
+fit.km$centers
+
+aggregate(olive[, 3:10], by=list(cluster=fit.km$cluster), mean)
+```
+
+Hacemos lo mismo para _k-medioids_, utilizando la funcion __pam__ del paquete
+_cluster_ y obtenemos el mejor número de clústeres a utilizar (entre 2 y 10)
+mediante la funcion __pamk__ del paquete _fpc_.
+
+```{r}
+pamk.best <- pamk(data, krange = 2:10)
+pamk.best$nc
+```
+
+Observamos que para _k-medioids_ el mejor número de clústeres en este caso es
+5, muy similar al obtenido para _k-means_.
+
+```{r}
+fit.pam <- pam(data, pamk.best$nc)
+plot(pam(data, pamk.best$nc))
+aggregate(olive[, 3:10], by=list(cluster=fit.pam$clustering), mean)
+```
+
+Como conslusión del ejercicio, resulta curioso resaltar que el número adecuado
+de clústeres recomendados se encuentre cercano a la media del número
+de niveles presentes en las variables categóricas de nuestro _dataset_:
+9 niveles para __Area__ y 3 niveles para __Region__.

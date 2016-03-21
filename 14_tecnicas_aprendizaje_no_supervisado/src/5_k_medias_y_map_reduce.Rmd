@@ -1,0 +1,83 @@
+---
+title: 'U-TAD - PEDS: Práctica 14 - Técnicas de aprendizaje no supervisado'
+author: "Rafael Enríquez-Herrador (rafael.enriquez@live.u-tad.com)"
+date: "17/02/2016"
+output: html_document
+---
+
+## K-medias y map reduce
+
+Implementar dos funciones, `map` y `reduce` de manera que
+
+```{r, eval=FALSE}
+n <- 5
+dat <- olive
+tmp <- dat[sample(1:nrow(dat), n),]
+for (i in 1:10) {
+  tmp <- map(tmp, dat)
+  tmp <- reduce(tmp, dat)
+}
+centroides <- tmp
+```
+
+__Nota__: `map` devuelve una lista de asignaciones de puntos (del fichero
+original) a centros (números de 1:n). `reduce` calcula los nuevos medioides.
+
+Función `map`:
+
+```{r}
+map <- function(centroids, data) {
+  # Distancia de cada punto a cada centroide
+  d <- apply(centroids, 1, function(x) colSums((t(data) - x)^2)) 
+  # Escoger el centroide más cercano
+  group <- max.col(-d)
+  return(group)
+}
+```
+
+Función `reduce`:
+
+```{r}
+reduce <- function(group, data) {
+  # Calcula los nuevos centroides como el centroide de las observaciones
+  # agrupadas
+  require(dplyr, quietly = T)
+  data$cluster <- group
+  tmp <- data %>% group_by(cluster) %>% sample_n(1)
+  # Se elige aleatoriamente un centroide dentro de cada grupo
+  tmp$cluster <- NULL
+  return(as.data.frame(tmp))
+}
+```
+
+Comprobemos el resultado.
+
+```{r}
+olive <- read.table(file = "../dat/olive.txt", header = T, sep = "\t")
+olive <- olive[, -c(1, 2, 11)]
+```
+```{r}
+n <- 5 # número de clústers
+dat <- olive
+tmp <- dat[sample(1:nrow(dat), n),]
+for (i in 1:10) {
+  tmp <- map(tmp, dat)
+  tmp <- reduce(tmp, dat)
+}
+centroides <- tmp
+```
+
+```{r}
+library(cluster)
+fit.pam <- pam(olive, 5)
+```
+Resultados para `map` y `reduce`:
+```{r}
+centroides
+```
+
+Resultados para _k-medioids_:
+```{r}
+aggregate(olive, by=list(cluster=fit.pam$clustering), median)
+```
+
