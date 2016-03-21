@@ -1,0 +1,258 @@
+---
+title: 'U-TAD - PEDS: Práctica 8 - Visualización de datos con ggplot2 y Gephi'
+author: "Rafael Enríquez-Herrador (rafael.enriquez@live.u-tad.com)"
+date: "27/07/2015"
+output:
+  html_document:
+    toc: yes
+  pdf_document:
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+---
+
+# Ejercicio obligatorio
+
+Para la realización de este ejercicio hemos elegido el _Dataset_ de la competición de [Kaggle](http://www.kaggle.com) titulada
+_San Francisco Crime Classification_ que puede ser descargado desde [aquí](https://www.kaggle.com/c/sf-crime/download/train.csv.zip).
+En él, se registran incidentes informados por el Departamento de Policía de San Francisco entre 2010 y 2015, así como información
+relevante sobre cada uno de estos incidentes.
+
+Comenzamos descargando el _Dataset_ **train.csv.zip** y lo descomprimimos en el directorio _datasets/SFCC_ en nuestro directorio
+de trabajo. Una vez descargado y descomprimido procedemos a analizarlo.
+
+Cargamos las librerías necesarias:
+
+```{r}
+#install.packages(c("ggplot2", "data.table"))
+library(ggplot2)
+library(data.table)
+```
+
+Y leemos el CSV
+
+```{r}
+dt.SFCSS <- read.table(file = "datasets/SFCC/train.csv",
+                       header = T,
+                       sep = ",",
+                       stringsAsFactors = F,
+                       numerals = c("no.loss"))
+```
+
+Un pequeño vistazo a nuestro _Data Frame_ nos mostrará su composición:
+
+```{r}
+str(dt.SFCSS)
+```
+
+Se puede observar que todos los campos han sido almacenados como **strings** lo que nos dificultará trabajar con ellos.
+Convertimos los datos a un tipo más manejable según su contexto y convertimos nuestro _Dataset_ a un objeto
+_data.table_ que nos permitirá manejarlo con mayor facilidad.
+
+```{r}
+dt.SFCSS$X <- as.numeric(dt.SFCSS$X)
+dt.SFCSS$Y <- as.numeric(dt.SFCSS$Y)
+dt.SFCSS$Dates <- as.Date(dt.SFCSS$Dates)
+dt.SFCSS$Category <- as.factor(dt.SFCSS$Category)
+dt.SFCSS$DayOfWeek <- as.factor(dt.SFCSS$DayOfWeek)
+dt.SFCSS$PdDistrict <- as.factor(dt.SFCSS$PdDistrict)
+dt.SFCSS$Resolution <- as.factor(dt.SFCSS$Resolution)
+
+dt.SFCSS <- as.data.table(dt.SFCSS)
+```
+
+Observamos de nuevo un resumen de nuestro _Dataset_
+
+```{r}
+str(dt.SFCSS)
+summary(dt.SFCSS)
+head(dt.SFCSS)
+```
+
+Los columnas que aparecen en el _Dataset_ son las siguientes:
+* **Dates**: Fecha en la que se registró el incidente.
+* **Category**: Categoría en la que se clasificó dicho incidentes (39 categoría)
+* **Descript**: Descripción breve
+* **DayOfWeek**: Día de la semana en que se produjo el incidente
+* **PdDistrict**: Distrito en el que que se produjo el incidente (11 distritos)
+* **Resolution**: Resolución del incidente (18 tipos)
+* **Address**: Dirección en la que se produjo el incidente
+* **X**: Longitud geográfica
+* **Y**: Latitud geográfica
+
+Se puede observar que la categoría que más se produce es **LARCENCY/THEFT** y que el distrito que más
+incidentes registra es **SOUTHERN**.
+
+Comprobamos como se distribuyen los incidentes por año agrupados por categorías mediante un histograma.
+Para ello agregamos una nueva columna **Years** que contenga el año en el que produjo el incidente:
+
+```{r}
+dt.SFCSS$Years <- year(dt.SFCSS$Dates)
+
+ggplot(dt.SFCSS, aes(x = Category, fill = Years)) +
+  geom_bar(aes(group = Years), binwidth = 0.75, show_guide = F) +
+  coord_flip() +
+  theme_bw() +
+  theme(axis.text.y = element_text(angle = 20, hjust = 1, size = 6))
+
+ggplot(dt.SFCSS, aes(x = Category, fill = Years)) +
+  geom_bar(binwidth = 0.75, show_guide = F) +
+  coord_flip() +
+  facet_wrap(~Years) +
+  theme_bw() +
+  theme(
+    axis.text.y = element_text(angle = 20, hjust = 1, size = 4),
+    axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Se puede ver que a lo largo de los años la distribución de las categorías de los incidentes registrados
+se mantiene de muy similar, siendo 2014 el año en el que más incidentes se registraron, siendo especialmente
+numerosos los **robos**. Es por ello que nos centraremos en el estudio de los incidentes que puedan categorizarse
+como robos.
+
+Para ello revisaremos todos las categorías presentes en el _Dataset_:
+
+```{r}
+levels(dt.SFCSS$Category)
+```
+
+Y tomamos un subconjunto de los que se puedan considerar robos: asaltos, hurtos, atracos, etc.
+
+```{r}
+thefts <- subset(dt.SFCSS, dt.SFCSS$Category == c("LARCENY/THEFT",
+                                                  "ASSAULT",
+                                                  "BURGLARY",
+                                                  "ROBBERY",
+                                                  "VEHICLE THEFT"))
+## Eliminamos las categorías de las que hemos prescindido
+thefts$Category <- as.factor(as.character(thefts$Category))
+```
+
+Observemos la frecuencia de robos según distrito en el que se producen, agrupados por año:
+
+```{r fig1,message=FALSE,include=TRUE,fig.cap="Caption"}
+ggplot(thefts, aes(x = PdDistrict, colour = Years)) +
+  geom_freqpoly(aes(group = Years), show_guide = F) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Vemos que la proporción de robos por distrito se mantiene regular, siendo el más "conflictivo"
+**SOUTHERN**.
+
+Obtengamos el subconjunto de robos que terminaron con **arresto**, esto nos indicará aquellos
+que fueron considerados como más "peligrosos".
+
+```{r}
+arrests <- subset(thefts, Resolution == "ARREST, BOOKED" | Resolution == "ARREST, CITED")
+## Eliminamos las resoluciones de las que hemos prescindido
+arrests$Resolution = as.factor(as.character(arrests$Resolution))
+```
+
+Finalmente, haciendo uso de las coordenadas geográficas, veamos como se distribuyen los robos
+que terminaron con detención, según su categoría. Así podremos mostrar el barrio o zona más
+peligrosa de San Francisco en cuanto a número de delitos:
+
+```{r}
+#install.packages("ggmap")
+library(ggmap)
+
+## Obtener mapa
+sfmap <- get_map(location = "san francisco",
+                 zoom = 12,
+                 maptype = "watercolor",
+                 source = "osm",
+                 color = "bw")
+
+## Iniciar mapa
+SFMap <- ggmap(sfmap, extent = "device", legend = "topleft")
+
+## Localización de arrestos 2010 ~ 2015
+SFMap <- SFMap +
+  stat_bin2d(
+    data = arrests,
+    aes(x = X, y = Y, colour = Category, fill = Category),
+    size = .5,
+    bins = 100,
+    alpha = .4) +
+  theme_bw()
+
+## Pintar mapa
+SFMap
+```
+
+Vemos que la mayoría de los delitos se concentran en los barrios de **Tenderloin**, **Hayes Valley** y **South of Market**,
+pero conforme se alejan de este punto lo hacen a través de avenidas y calles principales.
+
+De forma más concisa, veamos como se distribuyen los delitos de robo según su categoría a lo largo de los
+años. Aquí incluimos todos los robos y no sólo aquellos que acabaron en arresto:
+
+```{r}
+## Iniciar mapa
+SFMap <- ggmap(sfmap, extent = "device", legend = "topleft")
+
+## Localización de arrestos 2010 ~ 2015
+SFMap <- SFMap +
+  stat_density2d(
+    data = thefts,
+    aes(x = X, y = Y, fill = ..level.., alpha = ..level..),
+    size = 1,
+    bins = 20,
+    geom = "polygon",
+    na.rm = T) +
+  facet_wrap(~Category) +
+  theme_bw() +
+  scale_fill_gradient(low = "black", high= "red")
+
+## Pintar mapa
+SFMap
+```
+
+Se observa que los hurtos y los robos de vehículos se distribuyen más geográficamente, mientras que los asaltos, los robos
+y los atracos están más concentrados.
+
+# Ejercicio opcional
+
+Para el _Dataset_ **babynames** que se puede obtener a través de **CRAN** se nos pide que estudiemos que terminación de
+nombre es más común en el siglo XXI y su tendencia. Para ello tomaremos como siglo XXI desde el año 2000 (incluido).
+
+Cargamos las librerías y el _Dataset_
+
+```{r}
+#install.packages("babynames")
+require(babynames)
+library(data.table)
+library(stringr)
+library(ggplot2)
+
+dt.bnames <- as.data.table(babynames)
+```
+
+Obtenemos el subconjunto de nombres estudiados a partir del año 2000 (incluido) y añadimos a cada fila la terminación
+del nombre **name_end** y la suma de esa terminación en todo el _Dataset_ **n_end_sXXI** (teniendo en cuenta que **n**
+representa el el número de veces que se repite el nombre de la tupla en el año). La terminación la entendemos como la
+última letra del nombre.
+
+```{r}
+dt.sXXI <- dt.bnames[_end := str_sub(name, -1)]
+dt.sXXI[, n_end_sXXI := sum(n), by = name_end]
+```
+
+Ordenamos de forma decreciente el _Dataset_ por **n_end_sXXI** y vemos la última entrada.
+
+```{r}
+tail(dt.sXXI[order(n_end_sXXI)])
+```
+
+Ahora sabemos que la terminacion mas repetida es **n**
+
+Mostramos la tendencia de los nombres terminados en **n** a lo largo de los años.
+
+```{r}
+dt.plot <- dt.sXXI[str_sub(dt.sXXI$name_end, -1) == "n"]
+dt.plot <- dt.plot[, n_end_year := sum(n), by = year]
+dt.plot <- dt.plot[ ! duplicated(year)]
+
+dt.plot
+
+ggplot(dt.plot, aes(year, n_end_year)) + geom_line() + theme_bw()
+                            
